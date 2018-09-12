@@ -1,4 +1,4 @@
-This is a simple bitcoin block parser tools.
+This is a simple bitcoin block parser tools. which is a fork of block chain tools.
 
 - Support Segwit block.
 - Address has been encoded by Base58.

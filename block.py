@@ -20,7 +20,7 @@ class BlockHeader:
   def __init__(self, blockchain):
     self.version = uint4(blockchain)
     self.previous_hash = hashStr(hash32(blockchain))
-    self.merkleHash = hashStr(hash32(blockchain))
+    self.merkle_hash = hashStr(hash32(blockchain))
     self.time = uint4(blockchain)
     self.bits = uint4(blockchain)
     self.nonce = uint4(blockchain)
@@ -29,7 +29,7 @@ class BlockHeader:
     sb = []
     sb.append("Version: %d" % self.version)
     sb.append("Previous Hash: %s" % self.previous_hash)
-    sb.append("Merkle Root: %s" % self.merkleHash)
+    sb.append("Merkle Root: %s" % self.merkle_hash)
     sb.append("Time stamp: %s" % self.decode_time(self.time))
     sb.append("Difficulty: %d" % self.bits)
     sb.append("Nonce: %s" % self.nonce)

@@ -231,41 +231,53 @@ class TxOutput:
     try:
       op_code = OPCODE_NAMES[op_idx]
     except KeyError:
-      self.type = "P2PK"
-      # Obsoleted pay to pubkey directly
-      # For detail see: https://en.bitcoin.it/wiki/Script#Obsolete_pay-to-pubkey_transaction
-      pub_key_len = op_idx
-      op_code_tail = OPCODE_NAMES[int(hexstr[2 + pub_key_len * 2:2 + pub_key_len * 2 + 2], 16)]
-      self.pubkey_human = "Pubkey OP_CODE: None Bytes:%s tail_op_code:%s" % (pub_key_len, op_code_tail)
-      self.addr = crypto_lib.pubkey_to_address(hexstr[2:2 + pub_key_len * 2])[0]
+      if op_idx==65:
+        self.type = "P2PK"
+        # Obsoleted pay to pubkey directly
+        # For detail see: https://en.bitcoin.it/wiki/Script#Obsolete_pay-to-pubkey_transaction
+        pub_key_len = op_idx
+        op_code_tail = OPCODE_NAMES[int(hexstr[2 + pub_key_len * 2:2 + pub_key_len * 2 + 2], 16)]
+        self.pubkey_human = "Pubkey OP_CODE: None Bytes:%s tail_op_code:%s %d" % (pub_key_len, op_code_tail, op_idx)
+        self.addr = crypto_lib.pubkey_to_address(hexstr[2:2 + pub_key_len * 2])[0]
+      else:
+        # Some times people will push data directly
+        # e.g: https://www.blockchain.com/btc/tx/d65bb24f6289dad27f0f7e75e80e187d9b189a82dcf5a86fb1c6f8ff2b2c190f
+        self.type = "UNKNOWN"
+        pub_key_len = op_idx
+        self.pubkey_human = "PUSH_DATA:%s" % hexstr[2:2 + pub_key_len * 2]
+        self.addr = "UNKNOWN"
       return
-    if op_code == "OP_DUP":
-      self.type = "P2PKHA"
-      # P2PKHA pay to pubkey hash mode
-      # For detail see: https://en.bitcoin.it/wiki/Script#Standard_Transaction_to_Bitcoin_address_.28pay-to-pubkey-hash.29
-      op_code2 = OPCODE_NAMES[int(hexstr[2:4], 16)]
-      pub_key_len = int(hexstr[4:6], 16)
-      op_code_tail2 = OPCODE_NAMES[int(hexstr[6 + pub_key_len * 2:6 + pub_key_len * 2 + 2], 16)]
-      op_code_tail_last = OPCODE_NAMES[int(hexstr[6 + pub_key_len * 2 + 2:6 + pub_key_len * 2 + 4], 16)]
-      self.pubkey_human = "%s %s %s %s %s" % (op_code, op_code2,  hexstr[6:6 + pub_key_len * 2], op_code_tail2, op_code_tail_last)
-      self.addr = crypto_lib.gen_addr(hexstr[6:6 + pub_key_len * 2])[0]
-    elif op_code == "OP_HASH160":
-      self.type = "P2SH"
-      # P2SHA pay to script hash
-      # https://en.bitcoin.it/wiki/Transaction#Pay-to-Script-Hash
-      pub_key_len = int(hexstr[2:4], 16)
-      op_code_tail = OPCODE_NAMES[int(hexstr[4 + pub_key_len * 2:4 + pub_key_len * 2 + 2], 16)]
-      hash_code = hexstr[4:4 + pub_key_len * 2]
-      self.pubkey_human = "%s %s %s" % (op_code, hash_code, op_code_tail)
-      self.addr = hash_code
-    elif op_code == "OP_RETURN":
-      self.type = "RETRUN"
-      pub_key_len = int(hexstr[2:4], 16)
-      hash_code = hexstr[4:4 + pub_key_len * 2]
-      self.pubkey_human = "RETRUN %s" % (hash_code)
-      self.addr = hash_code
-    else:  # TODO extend for multi-signature parsing
+    try:
+      if op_code == "OP_DUP":
+        self.type = "P2PKHA"
+        # P2PKHA pay to pubkey hash mode
+        # For detail see: https://en.bitcoin.it/wiki/Script#Standard_Transaction_to_Bitcoin_address_.28pay-to-pubkey-hash.29
+        op_code2 = OPCODE_NAMES[int(hexstr[2:4], 16)]
+        pub_key_len = int(hexstr[4:6], 16)
+        op_code_tail2 = OPCODE_NAMES[int(hexstr[6 + pub_key_len * 2:6 + pub_key_len * 2 + 2], 16)]
+        op_code_tail_last = OPCODE_NAMES[int(hexstr[6 + pub_key_len * 2 + 2:6 + pub_key_len * 2 + 4], 16)]
+        self.pubkey_human = "%s %s %s %s %s" % (op_code, op_code2,  hexstr[6:6 + pub_key_len * 2], op_code_tail2, op_code_tail_last)
+        self.addr = crypto_lib.gen_addr(hexstr[6:6 + pub_key_len * 2])[0]
+      elif op_code == "OP_HASH160":
+        self.type = "P2SH"
+        # P2SHA pay to script hash
+        # https://en.bitcoin.it/wiki/Transaction#Pay-to-Script-Hash
+        pub_key_len = int(hexstr[2:4], 16)
+        op_code_tail = OPCODE_NAMES[int(hexstr[4 + pub_key_len * 2:4 + pub_key_len * 2 + 2], 16)]
+        hash_code = hexstr[4:4 + pub_key_len * 2]
+        self.pubkey_human = "%s %s %s" % (op_code, hash_code, op_code_tail)
+        self.addr = hash_code
+      elif op_code == "OP_RETURN":
+        self.type = "RETRUN"
+        pub_key_len = int(hexstr[2:4], 16)
+        hash_code = hexstr[4:4 + pub_key_len * 2]
+        self.pubkey_human = "RETRUN %s" % (hash_code)
+        self.addr = hash_code
+      else:  # TODO extend for multi-signature parsing
+        self.type = "UNKNOWN"
+        self.pubkey_human = "Need to extend multi-signaturer parsing %x" % int(hexstr[0:2], 16) + op_code
+        self.addr = "UNKNOWN"
+    except:
       self.type = "UNKNOWN"
-      self.pubkey_human = "  Need to extend multi-signaturer parsing %x" % int(hexstr[0:2], 16) + op_code
       self.addr = "UNKNOWN"
 

@@ -2,7 +2,7 @@ This is a simple bitcoin block parser tools. which is a fork of block chain tool
 
 - Support Segwit block.
 - Address has been encoded by Base58.
-- Support basic payment methods.   
+- Support basic payment methods.
 
 ## Bitcoin block parser
 
@@ -20,7 +20,11 @@ Bitcoin block parser implementation written in python3.
 
 ```
 python3 sight.py blk01234.001
+python3 check.py g:\bitcoin\data\block 0 1000
 ```
+
+# Performance
+Iterate block00001.dat to block01000.dat need roughly 8~10 hours. (intel i3, 8G mem) 
 
 ## Contributing
 

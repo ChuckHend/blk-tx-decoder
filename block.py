@@ -6,7 +6,7 @@ import crypto_lib
 class BlockFile:
   def __init__(self, block_filename):
     self.block_filename = block_filename
-    self.blockchain = open(block_filename, 'rb')
+    self.blockchain = open(block_filename, 'rb', buffering=16*1024*1024)
 
   def get_next_block(self):
     while True:
@@ -44,14 +44,14 @@ class Block:
   def __init__(self, blockchain):
     self.blockchain = blockchain
     self.is_ready = True
-    self.magicNum = 0
+    self.magic_num = 0
     self.block_size = 0
     self.block_header = ''
-    self.txCount = 0
+    self.tx_count = 0
     self.txs = []
 
     if self.has_length(8):
-      self.magicNum = uint4(self.blockchain)
+      self.magic_num = uint4(self.blockchain)
       self.block_size = uint4(self.blockchain)
     else:
       self.is_ready = False
@@ -59,18 +59,18 @@ class Block:
 
     if self.has_length(self.block_size):
       self.set_header()
-      self.txCount = varint(self.blockchain)
+      self.tx_count = varint(self.blockchain)
       self.txs = []
     else:
       self.is_ready = False
     self.tx_pos = self.blockchain.tell()
-    for i in range(0, self.txCount):
+    for i in range(0, self.tx_count):
       tx = Tx(self.blockchain)
       self.txs.append(tx)
 
   def get_next_tx(self):
     self.blockchain.seek(self.tx_pos)
-    for i in range(0, self.txCount):
+    for i in range(0, self.tx_count):
       tx = Tx(self.blockchain)
       tx.seq = i
       yield tx
@@ -97,14 +97,14 @@ class Block:
 
   def to_string(self):
     sb = []
-    sb.append("Magic No: \t%8x" % self.magicNum)
+    sb.append("Magic No: \t%8x" % self.magic_num)
     sb.append("Block size: \t%d" % self.block_size)
     sb.append("### Block Header ###")
     sb.extend(self.block_header.to_string())
-    sb.append("### Tx Count: %d ###" % self.txCount)
+    sb.append("### Tx Count: %d ###" % self.tx_count)
     for tx in self.get_next_tx():
       sb.extend(tx.to_string())
-    sb.append("###### End of all %d transactins #######" % self.txCount)
+    sb.append("###### End of all %d transactins #######" % self.tx_count)
     sb.append('')
     return sb
 
@@ -113,11 +113,11 @@ class Tx:
     start_pos = blockchain.tell()
     self.version = uint4(blockchain)
     check_pos = blockchain.tell()
-    # For segwit
-    # https://en.bitcoin.it/wiki/Transaction
-    dummy1 = uint1(blockchain)
-    dummy2 = uint1(blockchain)
-    if dummy1 != 0 or dummy2 != 1:
+    # Segwit - https://en.bitcoin.it/wiki/Transaction
+    # BIP141 - https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki#specification
+    marker = uint1(blockchain)
+    flag = uint1(blockchain)
+    if marker != 0 or flag != 1:
       blockchain.seek(check_pos)
     self.inCount = varint(blockchain)
     self.inputs = []
@@ -130,13 +130,13 @@ class Tx:
       for i in range(0, self.outCount):
         self.outputs.append(TxOutput(blockchain, i))
     # For segwit
-    if dummy1 == 0 and dummy2 == 1:
+    if marker == 0 and flag == 1:
       for i in range(0, self.inCount): 
-        num_op = uint1(blockchain)
+        num_op = varint(blockchain)
         for n in range(0, num_op):
-          op_code=uint1(blockchain)
+          op_code=varint(blockchain)
           _ = hashStr(blockchain.read(op_code))
-    self.lockTime = uint4(blockchain)
+    self.lock_time = uint4(blockchain)
     cur_pos = blockchain.tell()
     blockchain.seek(start_pos)
     self.raw_bytes = blockchain.read(cur_pos - start_pos)
@@ -154,7 +154,7 @@ class Tx:
     sb.append("Outputs: %d" % self.outCount)
     for o in self.outputs:
       sb.extend(o.to_string())
-    sb.append("Lock Time: %d" % self.lockTime)
+    sb.append("Lock Time: %d" % self.lock_time)
     return sb
 
 
@@ -200,11 +200,10 @@ class TxInput:
     sb = []
     s = ""
     if idx == 0xFFFFFFFF:
-      s = "Coinbase with special index"
       sb.append("  [Coinbase] Text: %s" % hashStr(self.prev_hash))
     else:
       sb.append("  Prev. Tx Hash: %s" % hashStr(self.prev_hash))
-    return "%8x" % idx + s, sb
+    return "%8x" % idx, sb
 
 
 class TxOutput:
@@ -227,7 +226,14 @@ class TxOutput:
     ''' https://en.bitcoin.it/wiki/Script '''
     hexstr = hashStr(data)
     # Get the first two bytes.
-    op_idx = int(hexstr[0:2], 16)
+    # which might some problem.
+    # https://www.blockchain.com/btc/tx/7bd54def72825008b4ca0f4aeff13e6be2c5fe0f23430629a9d484a1ac2a29b8
+    try:
+      op_idx = int(hexstr[0:2], 16)
+    except:
+      self.type = "UN"
+      self.addr = "UNKNOWN"
+      return
     try:
       op_code = OPCODE_NAMES[op_idx]
     except KeyError:
@@ -242,7 +248,7 @@ class TxOutput:
       else:
         # Some times people will push data directly
         # e.g: https://www.blockchain.com/btc/tx/d65bb24f6289dad27f0f7e75e80e187d9b189a82dcf5a86fb1c6f8ff2b2c190f
-        self.type = "UNKNOWN"
+        self.type = "UN"
         pub_key_len = op_idx
         self.pubkey_human = "PUSH_DATA:%s" % hexstr[2:2 + pub_key_len * 2]
         self.addr = "UNKNOWN"
@@ -268,16 +274,16 @@ class TxOutput:
         self.pubkey_human = "%s %s %s" % (op_code, hash_code, op_code_tail)
         self.addr = hash_code
       elif op_code == "OP_RETURN":
-        self.type = "RETRUN"
+        self.type = "OP_RETURN"
         pub_key_len = int(hexstr[2:4], 16)
         hash_code = hexstr[4:4 + pub_key_len * 2]
-        self.pubkey_human = "RETRUN %s" % (hash_code)
+        self.pubkey_human = "OP_RETURN %s" % (hash_code)
         self.addr = hash_code
       else:  # TODO extend for multi-signature parsing
-        self.type = "UNKNOWN"
+        self.type = "UN"
         self.pubkey_human = "Need to extend multi-signaturer parsing %x" % int(hexstr[0:2], 16) + op_code
         self.addr = "UNKNOWN"
     except:
-      self.type = "UNKNOWN"
+      self.type = "UN"
       self.addr = "UNKNOWN"
 

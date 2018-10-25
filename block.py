@@ -1,7 +1,6 @@
-from blocktools import *
+from crypto_lib import *
 from opcode import *
 from datetime import datetime
-import crypto_lib
 
 class BlockFile:
   def __init__(self, block_filename):
@@ -63,17 +62,11 @@ class Block:
       self.txs = []
     else:
       self.is_ready = False
+
     self.tx_pos = self.blockchain.tell()
     for i in range(0, self.tx_count):
       tx = Tx(self.blockchain)
       self.txs.append(tx)
-
-  def get_next_tx(self):
-    self.blockchain.seek(self.tx_pos)
-    for i in range(0, self.tx_count):
-      tx = Tx(self.blockchain)
-      tx.seq = i
-      yield tx
 
   def get_block_size(self):
     return self.block_size
@@ -102,7 +95,7 @@ class Block:
     sb.append("### Block Header ###")
     sb.extend(self.block_header.to_string())
     sb.append("### Tx Count: %d ###" % self.tx_count)
-    for tx in self.get_next_tx():
+    for tx in self.txs:
       sb.extend(tx.to_string())
     sb.append("###### End of all %d transactins #######" % self.tx_count)
     sb.append('')
@@ -113,12 +106,19 @@ class Tx:
     start_pos = blockchain.tell()
     self.version = uint4(blockchain)
     check_pos = blockchain.tell()
+
     # Segwit - https://en.bitcoin.it/wiki/Transaction
     # BIP141 - https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki#specification
+    tx_in_pos = blockchain.tell()
     marker = uint1(blockchain)
     flag = uint1(blockchain)
+    is_segwit = False
     if marker != 0 or flag != 1:
       blockchain.seek(check_pos)
+    else:
+      is_segwit = True
+      tx_in_pos = blockchain.tell()
+
     self.inCount = varint(blockchain)
     self.inputs = []
     self.seq = 1
@@ -129,17 +129,26 @@ class Tx:
     if self.outCount > 0:
       for i in range(0, self.outCount):
         self.outputs.append(TxOutput(blockchain, i))
+    segwit_pos = blockchain.tell()
     # For segwit
-    if marker == 0 and flag == 1:
+    if is_segwit:
       for i in range(0, self.inCount): 
         num_op = varint(blockchain)
         for n in range(0, num_op):
           op_code=varint(blockchain)
           _ = hashStr(blockchain.read(op_code))
-    self.lock_time = uint4(blockchain)
+    raw_lock_time = blockchain.read(4)
+    self.lock_time = struct.unpack('I', raw_lock_time)[0]
     cur_pos = blockchain.tell()
     blockchain.seek(start_pos)
-    self.raw_bytes = blockchain.read(cur_pos - start_pos)
+    if is_segwit:
+      raw_version = blockchain.read(4)
+      blockchain.read(2)
+      raw_in_out = blockchain.read(segwit_pos - tx_in_pos)
+      self.raw_bytes = raw_version + raw_in_out + raw_lock_time
+    else:
+      self.raw_bytes = blockchain.read(cur_pos - start_pos)
+    blockchain.seek(cur_pos)
     self.tx_hash = hash_tx(self.raw_bytes)
 
   def to_string(self):
@@ -157,52 +166,55 @@ class Tx:
     sb.append("Lock Time: %d" % self.lock_time)
     return sb
 
-
 class TxInput:
   def __init__(self, blockchain, idx):
     self.idx = idx
-    self.prev_hash = hash32(blockchain)
+    self.prev_hash = hashStr(hash32(blockchain))
     self.tx_outId = uint4(blockchain)
     self.script_len = varint(blockchain)
     self.script_sig = blockchain.read(self.script_len)
     self.seqNo = uint4(blockchain)
+    self.decode_script_sig(self.script_sig)
+
 
   def to_string(self):
     sb = []
-    sb.append("  Tx Previous has: %s" % hashStr(self.prev_hash))
-    idx, temp_sb = self.decode_out_idx(self.tx_outId)
-    sb.extend(temp_sb)
+    sb.append("  Tx Previous has: %s - %d" % (self.prev_hash, self.idx))
     sb.append("  Script Length: %d" % self.script_len)
-    hexstr, temp_sb = self.decode_script_sig(self.script_sig)
-    sb.extend(temp_sb)
+    sb.append("  %s" % self.hex_str)
+    sb.append("  PubKey: %s" % self.pub_key)
     sb.append("  Sequence: %8x" % self.seqNo)
     return sb
 
   def decode_script_sig(self, data):
     sb = []
-    hexstr = hashStr(data)
+    self.hex_str = hashStr(data)
+    # segwit
+    if len(self.hex_str) == 0:
+      self.pub_key=""
+      return
     if 0xffffffff == self.tx_outId:  # Coinbase
-      sb.append("  Script raw:%s decode:%s" % (hexstr, str(bytes.fromhex(hexstr))))
-      return str(bytes.fromhex(hexstr)), sb
-    script_len = int(hexstr[0:2], 16)
+      self.pub_key = str(bytes.fromhex(self.hex_str))
+      return
+    script_len = int(self.hex_str[0:2], 16)
     script_len *= 2
-    script = hexstr[2:2 + script_len]
+    script = self.hex_str[2:2 + script_len]
     sb.append("  Script: " + script)
-    if SIGHASH_ALL != int(hexstr[script_len:script_len + 2], 16):  # should be 0x01
-      sb.append("  Script op_code is not SIGHASH_ALL")
-      return hexstr, sb
-    else:
-      pubkey = hexstr[2 + script_len + 2:2 + script_len + 2 + 66]
-      sb.append("  InPubkey: " + pubkey)
-      return hexstr, sb
+    try:
+      if SIGHASH_ALL != int(self.hex_str[script_len:script_len + 2], 16):  # should be 0x01
+        self.pub_key = ""
+      else:
+        self.pub_key = self.hex_str[2 + script_len + 2:2 + script_len + 2 + 66]
+    except:
+      self.pub_key = ""
 
   def decode_out_idx(self, idx):
     sb = []
     s = ""
-    if idx == 0xFFFFFFFF:
-      sb.append("  [Coinbase] Text: %s" % hashStr(self.prev_hash))
+    if idx == 0xffffffff:
+      sb.append("  [Coinbase] Text: %s" % self.prev_hash)
     else:
-      sb.append("  Prev. Tx Hash: %s" % hashStr(self.prev_hash))
+      sb.append("  Prev. Tx Hash: %s" % self.prev_hash)
     return "%8x" % idx, sb
 
 
@@ -212,6 +224,7 @@ class TxOutput:
     self.value = uint8(blockchain)
     self.script_len = varint(blockchain)
     self.pubkey = blockchain.read(self.script_len)
+    self.addr = "UNKNOWN"
     self.decode_scriptpubkey(self.pubkey)
 
   def to_string(self):
@@ -231,7 +244,7 @@ class TxOutput:
     try:
       op_idx = int(hexstr[0:2], 16)
     except:
-      self.type = "UN"
+      self.type = "EXCEPTION"
       self.addr = "UNKNOWN"
       return
     try:
@@ -244,7 +257,7 @@ class TxOutput:
         pub_key_len = op_idx
         op_code_tail = OPCODE_NAMES[int(hexstr[2 + pub_key_len * 2:2 + pub_key_len * 2 + 2], 16)]
         self.pubkey_human = "Pubkey OP_CODE: None Bytes:%s tail_op_code:%s %d" % (pub_key_len, op_code_tail, op_idx)
-        self.addr = crypto_lib.pubkey_to_address(hexstr[2:2 + pub_key_len * 2])[0]
+        self.addr = pubkey_to_address(hexstr[2:2 + pub_key_len * 2])[0]
       else:
         # Some times people will push data directly
         # e.g: https://www.blockchain.com/btc/tx/d65bb24f6289dad27f0f7e75e80e187d9b189a82dcf5a86fb1c6f8ff2b2c190f
@@ -263,7 +276,7 @@ class TxOutput:
         op_code_tail2 = OPCODE_NAMES[int(hexstr[6 + pub_key_len * 2:6 + pub_key_len * 2 + 2], 16)]
         op_code_tail_last = OPCODE_NAMES[int(hexstr[6 + pub_key_len * 2 + 2:6 + pub_key_len * 2 + 4], 16)]
         self.pubkey_human = "%s %s %s %s %s" % (op_code, op_code2,  hexstr[6:6 + pub_key_len * 2], op_code_tail2, op_code_tail_last)
-        self.addr = crypto_lib.gen_addr(hexstr[6:6 + pub_key_len * 2])[0]
+        self.addr = gen_addr(hexstr[6:6 + pub_key_len * 2])[0]
       elif op_code == "OP_HASH160":
         self.type = "P2SH"
         # P2SHA pay to script hash
@@ -284,6 +297,6 @@ class TxOutput:
         self.pubkey_human = "Need to extend multi-signaturer parsing %x" % int(hexstr[0:2], 16) + op_code
         self.addr = "UNKNOWN"
     except:
-      self.type = "UN"
+      self.type = "ERROR"
       self.addr = "UNKNOWN"
 

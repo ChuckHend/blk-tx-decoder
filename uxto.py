@@ -10,7 +10,9 @@ class Uxto:
     cursor = self._conn.cursor()
     # cursor.execute("drop table uxto;")
     cursor.execute("CREATE TABLE uxto (tx_hash text, value int64);")
-    cursor.execute("CREATE UNIQUE INDEX index_tx_hash ON uxto(tx_hash);")
+    # can not use unique index.
+    # https://www.blockchain.com/btc/tx/d5d27987d2a3dfc724e359870c6644b40e497bdc0589a033220fe15429d88599
+    cursor.execute("CREATE INDEX index_tx_hash ON uxto(tx_hash);")
     self._conn.commit()
 
   def info(self):
@@ -27,12 +29,11 @@ class Uxto:
     if len(tx_dict) > 0:
       cursor = self._conn.cursor()
       sql = "INSERT INTO uxto (tx_hash, value) VALUES " + ",".join(list(map(lambda t: "('%s', %d)" % (t[0], t[1]), tx_dict.items())))
-      print(sql)
       cursor.execute(sql)
 
   def clear(self, tx_set):
     """
-    :param tx_dict: key is uxto(tx_hash+idx) value is value.
+    :param tx_set: key is uxto(tx_hash+idx) value is value.
     :return:
     """
     cursor = self._conn.cursor()

@@ -55,6 +55,9 @@ class Uxto:
   def commit(self):
     self._conn.commit()
 
+  def vacuum(self):
+    self._conn.execute("vacuum")
+
 
 if __name__ == "__main__":
   uxto = Uxto("test");

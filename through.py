@@ -6,7 +6,7 @@ import logging
 import os
 
 # Local import
-from uxto import Uxto
+from uxto_memory import Uxto
 from block import BlockFile
 
 parser = argparse.ArgumentParser()
@@ -34,10 +34,6 @@ logger.addHandler(fh)
 logger.addHandler(ch)
 
 
-def uxto_key(tx_hash, idx):
-    return "%s:%d" % (tx_hash, idx)
-
-
 def run():
     """ Go through all the txs in blocks. """
     if len(sys.argv) < 2:
@@ -50,6 +46,7 @@ def run():
         # key: tx_hash+idx
         uk_hask_key_set = set()
         block_counter = 0
+        tx_counter = 0
         update_time = time.time() - time.time()
         iter_time = time.time() - time.time()
         io_time = time.time() - time.time()
@@ -62,30 +59,23 @@ def run():
                 if block_counter % 100 == 0:
                     previous_hash = block.block_header.previous_hash
                     uxto_info = uxto.info()
-                    time_start = time.time()
-                    uxto.commit()
-                    commit_time = time.time() - time_start
-                    logger.info("%d:%d %s tx_c:%d uxto_c:%d uk:%d v:%d u_t:%.3f i_t:%.3f o_t:%.3f c_t:%.3f" % (
+                    commit_counter = uxto.commit()
+                    logger.info("%d:%d %s tx_c:%d uxto_c:%d uk:%d v:%d cm:%d u_t:%.3f i_t:%.3f o_t:%.3f" % (
                         i,                     # blk index
                         block_counter,         # block index
                         previous_hash,         # The has of previous block.
                         block.tx_count,        # tx count in this block
                         uxto_info[0],          # size of uxto
                         len(uk_hask_key_set),  # size of unknown
-                        uxto_info[1] / 100000000 if uxto_info[1] else 0,
+                        uxto_info[1] / 100000000 if uxto_info[1] else 0,    # bitcoin value
+                        commit_counter,        # tx change number
                         update_time,           # update Sqlite time
                         iter_time,             # iterate data time
                         io_time,               # read block time
-                        commit_time            # Sqlite commit time
                     ))
                     # reset
-                    update_time = time.time() - time.time()
-                    iter_time = time.time() - time.time()
-                    io_time = time.time() - time.time()
+                    update_time, iter_time, io_time = 0, 0, 0
 
-                    if block_counter % 10000 == 0:
-                        logger.debug("Start to vacuum sqlite db.")
-                        uxto.vacuum()
                 block_counter += 1
 
                 input_set = set()
@@ -94,20 +84,19 @@ def run():
                 time_start = time.time()
                 # Collect all input and output.
                 for tx in block.txs:
+                    tx_counter = tx_counter + 1
                     for inp in tx.inputs:
                         if 0xffffffff != inp.tx_outId:  # not a coinbase
-                            inp_oxto_key = uxto_key(inp.prev_hash, inp.tx_outId)
                             # If the tx input is in this block, obliterate the input and uxto
-                            if inp_oxto_key in output_dict.keys():
-                                output_dict.pop(inp_oxto_key)
+                            if (inp.prev_hash, inp.tx_outId) in output_dict.keys():
+                                output_dict.pop((inp.prev_hash, inp.tx_outId))
                             else:
-                                input_set.add(inp_oxto_key)
+                                input_set.add((inp.prev_hash, inp.tx_outId))
                     for out in tx.outputs:
-                        out_uxto_key = uxto_key(tx.tx_hash, out.idx)
-                        if out_uxto_key in uk_hask_key_set:
-                            uk_hask_key_set.remove(out_uxto_key)
+                        if (tx.tx_hash, out.idx) in uk_hask_key_set:
+                            uk_hask_key_set.remove((tx.tx_hash, out.idx))
                         elif out.value > 0:  # ignore the place holder output case.
-                            output_dict[out_uxto_key] = out.value
+                            output_dict[(tx.tx_hash, out.idx)] = out.value
                 iter_time = iter_time + time.time() - time_start
 
                 time_start = time.time()

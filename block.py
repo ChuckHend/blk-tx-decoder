@@ -1,12 +1,16 @@
 from crypto_lib import *
 from opcode import *
 from datetime import datetime
-
+import os
+import mmap
 
 class BlockFile:
     def __init__(self, block_filename):
         self.block_filename = block_filename
-        self.blockchain = open(block_filename, 'rb', buffering=16 * 1024 * 1024)
+
+        with open(block_filename, 'rb', buffering=16 * 1024 * 1024) as f:
+            size = os.path.getsize(f.name)
+            self.blockchain = mmap.mmap(f.fileno(), size, access=mmap.ACCESS_READ)
 
     def get_next_block(self):
         while True:

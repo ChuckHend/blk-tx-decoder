@@ -1,4 +1,11 @@
-*~
-*.pyc
-*.db
-*.log
+# secrets
+config/secrets
+
+# python
+**/*/__pycache__
+__pycache__
+
+# test relic
+.coverage
+results.xml
+cov.xml

@@ -1,0 +1,16 @@
+base58
+boto3==1.9.114
+celery==5.0.5
+debugpy
+joblib
+requests==2.21.0
+pandas
+pgcopy
+prometheus-client==0.8.0
+psutil
+psycopg2-binary
+pytest
+pytest-cov
+python-dotenv
+redis
+sqlalchemy

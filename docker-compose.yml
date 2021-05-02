@@ -1,0 +1,48 @@
+version: '3'
+services:
+  redis:
+    restart: always
+    image: 'bitnami/redis:6.0'
+    container_name: btc-decoder-redis
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+    ports:
+    - 6399:6379
+  scheduler:
+    container_name: btc-decoder-scheduler
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    env_file:
+      - ./config/secrets
+    volumes: 
+      - ./:/usr/src/app
+      - /mnt/data/Bitcoin:/usr/src/app/Bitcoin
+      # - /mnt/ubu-data/projects/Bitcoin:/usr/src/app/Bitcoin
+    # network_mode: host
+    environment:
+    # - REDIS_HOST=10.0.0.164
+    - ENVIRONMENT=${ENVIRONMENT}
+    - CONCURRENCY=8
+    - BTC_INPUT_DIRECTORY=/usr/src/app/Bitcoin/blocks
+    - BTC_OUTPUT_DIRECTORY=/usr/src/app/Bitcoin/blocks_parsed
+    command: python -u app.py
+    # command: python -m debugpy --listen 0.0.0.0:5678 --wait-for-client decoder.py  
+  worker:
+    restart: always
+    container_name: btc-decoder-worker
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    env_file: 
+      - ./config/secrets
+    volumes: 
+      - ./:/usr/src/app
+      - /mnt/data/Bitcoin:/usr/src/app/Bitcoin
+      # - /mnt/ubu-data/projects/Bitcoin:/usr/src/app/Bitcoin
+    # network_mode: host
+    environment:
+    - ENVIRONMENT=${ENVIRONMENT}
+    - CONCURRENCY=4
+    command: celery -A app.celery_app worker -Q BLOCKS --loglevel=DEBUG

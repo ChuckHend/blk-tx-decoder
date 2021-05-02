@@ -17,15 +17,14 @@ from loader.postgres import pg_conn
 
 @dataclass
 class BlockFile:
-    block_file_name: str
+    block_filename: str
 
-    transactions: List[dict] = None
+    transactions: list[dict] = None
     block_file_identifier: str = None
 
     def __post_init__(self):
-        self.block_filename = block_filename
 
-        with open(block_filename, 'rb', buffering=16 * 1024 * 1024) as f:
+        with open(self.block_filename, 'rb', buffering=16 * 1024 * 1024) as f:
             size = os.path.getsize(f.name)
             self.blockchain = mmap.mmap(f.fileno(), size, access=mmap.ACCESS_READ)
 

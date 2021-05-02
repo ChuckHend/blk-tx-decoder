@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.DEBUG,
 class BitcoinBlockFile:
     file_path: str
 
-    transactions: List[dict] = None
+    transactions: list[dict] = None
     block_file_identifier: str = None
     blockfile: BlockFile = None
 

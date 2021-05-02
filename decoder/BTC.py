@@ -13,7 +13,10 @@ from pgcopy import CopyManager
 import pandas as pd
 from sqlalchemy.types import JSON
 
-from loader.postgres import pg_conn
+from config.config import (
+    PG_SCHEMA,
+)
+from loader.postgres import pg_conn, connect_pg
 
 @dataclass
 class BlockFile:

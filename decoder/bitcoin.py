@@ -114,8 +114,9 @@ class BitcoinBlockFile:
 
 
 def parse_input() -> tuple:
-    input_dir = os.environ["BTC_INPUT_DIRECTORY"]
-    output_dir = os.environ["BTC_OUTPUT_DIRECTORY"]
+    BLOCKSDIR = os.environ["BLOCKSDIR"]
+    input_dir = f"{BLOCKSDIR}/blocks"
+    output_dir = f"{BLOCKSDIR}/blocks_parsed"
     logging.info({
         "BTC_INPUT_DIRECTORY": input_dir,
         "BTC_OUTPUT_DIRECTORY": output_dir

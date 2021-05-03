@@ -1,6 +1,10 @@
+TEST_COMPOSE:=test-compose.yml
+
 export ENVIRONMENT:=dev
 
-.phony: blocks
+
+
+.phony: all blocks test
 
 stop:
 	docker-compose down
@@ -10,14 +14,17 @@ restart: stop start
 logs:
 	docker-compose logs -f
 
-test: run-test
-	ENVIRONMENT=test docker-compose -f test-compose.yml exec -T loader \
+test-run:
+	docker-compose -f ${TEST_COMPOSE} up --build -d worker
+
+test: test-run 
+	docker-compose -f ${TEST_COMPOSE} exec -T worker \
 	pytest ${TEST_PATH} \
 		-x \
-		--cov=collector \
+		--cov=./ \
 		--cov-report term \
 		--cov-report=xml:./cov.xml
-	ENVIRONMENT=test docker-compose -f test-compose.yml down
+	docker-compose -f ${TEST_COMPOSE} down
 
 blocks:
 	docker-compose up -d --build

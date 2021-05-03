@@ -18,7 +18,7 @@ services:
     environment:
     - ENVIRONMENT=${ENVIRONMENT:-dev}
     - CONCURRENCY=${CONCURRENCY:-4}
-    - BLOCKSDIR=${BLOCKSDIR}
+    - BLOCKSDIR=${BLOCKSDIR_INTERNAL}
     command: python -u app.py
   worker:
     container_name: blk-decoder-worker

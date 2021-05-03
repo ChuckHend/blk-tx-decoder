@@ -1,0 +1,16 @@
+version: '3'
+services:
+  worker:
+    container_name: blk-decoder-worker
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    env_file: 
+      - ./config/secrets
+    volumes:
+      - ${BLOCKSDIR}:${BLOCKSDIR_INTERNAL}
+      - ./:/usr/src/app
+    environment:
+    - ENVIRONMENT=${ENVIRONMENT:-dev}
+    - CONCURRENCY=${CONCURRENCY:-4}
+    command: sleep 600

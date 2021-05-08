@@ -12,8 +12,12 @@ from sqlalchemy.types import JSON
 
 from loader.postgres import pg_conn
 
-from decoder.BTC import BlockFile
+from decoder.utils import BlockFile
 from loader.postgres import connect_pg, PG_SCHEMA, PG_DATABASE
+
+
+from loader.celery import celery_app, CallbackTask
+import time
 
 logging.basicConfig(level=logging.DEBUG,
                     format='%(message)s %(threadName)s %(processName)s',
@@ -181,8 +185,6 @@ def diff_sql(input_dir):
 
     return paths
 
-from loader.celery import celery_app, CallbackTask
-import time
 
 @celery_app.task(base=CallbackTask)
 def decode_blk_file(input_file):

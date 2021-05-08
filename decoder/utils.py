@@ -285,7 +285,7 @@ class TxInput:
             # "script_len": self.script_len,
             "hex_str": self.hex_str,
             # "PubKey": self.pub_key,
-            "pub_key_decoded": publicKeyDecode(self.hex_str).decode("utf-8"),
+            "addr": pubkey_to_address(self.hex_str[2:2 + int(self.hex_str[0:2], 16) * 2])[0],
             # "seq": self.seqNo
         }
 
@@ -334,13 +334,13 @@ class TxOutput:
         return {
             "value_satoshi": self.value,
             # "script_len": self.script_len,
-            "ScriptPubKey": self.addr,
+            # "ScriptPubKey": self.addr,
             "addr": self.addr
         }
 
     def decode_scriptpubkey(self, data):
         ''' https://en.bitcoin.it/wiki/Script '''
-        hexstr = hashStr(data)
+        hexstr = hashStr(data) 
         # Get the first two bytes.
         # which might some problem.
         # https://www.blockchain.com/btc/tx/7bd54def72825008b4ca0f4aeff13e6be2c5fe0f23430629a9d484a1ac2a29b8

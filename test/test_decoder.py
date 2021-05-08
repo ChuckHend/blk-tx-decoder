@@ -1,4 +1,4 @@
-from decoder.BTC import (
+from decoder.utils import (
     BlockFile
 )
 

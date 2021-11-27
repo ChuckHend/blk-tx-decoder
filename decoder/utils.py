@@ -21,6 +21,8 @@ from decoder.constants import *
 from loader.postgres import pg_conn, connect_pg
 
 
+# TODO: privkey -> ECMA -> Pubkey -> ripemd160(sha256) -> pubkey hash -> Base58 check -> wallet
+
 @dataclass
 class BlockFile:
     block_filename: str
